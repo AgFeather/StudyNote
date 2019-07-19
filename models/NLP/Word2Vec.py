@@ -42,7 +42,7 @@ def preprocess(text, freq=5):
     return string_words, int_words, vocab2int, int2vocab
 
 
-def load_text8(data_path='../data/text8'):
+def load_text8(data_path='dataset/text8'):
     with open(data_path, 'r') as file:
         text = file.read()
     return text
