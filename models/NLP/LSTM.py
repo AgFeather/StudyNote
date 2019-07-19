@@ -22,8 +22,9 @@ def get_flags():
     tf.app.flags.DEFINE_integer('time_steps', 50, 'time step')
     tf.app.flags.DEFINE_integer('embed_dim', 512, 'dimesion of embedding')
     tf.app.flags.DEFINE_integer('num_units', 512, 'number of units in hidden layer')
-    tf.app.flags.DEFINE_integer('num_epochs', 1, 'number of epoch')
+    tf.app.flags.DEFINE_integer('num_epochs', 8, 'number of epoch')
     tf.app.flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
+    tf.app.flags.DEFINE_string('model_save_path', 'trained_model/lstm.ckpt', 'the path to save trained model')
     return flags
 
 class DeepWriterModel(object):
@@ -63,11 +64,11 @@ class DeepWriterModel(object):
                                       initializer=tf.constant_initializer(0.0))
         logits = tf.matmul(fc_layer, output_weight) + output_bias
 
-        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=tf.reshape(target_y, [-1]))
+        loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=tf.reshape(target_y, [-1])))
         accuracy = tf.reduce_mean(
             tf.cast(
                 tf.equal(
-                    tf.argmax(logits, axis=1), target_y
+                    tf.argmax(logits, axis=1), tf.reshape(target_y, [-1])
                 ),
             tf.float32)
         )
@@ -82,6 +83,7 @@ class DeepWriterModel(object):
         return input_x, target_y, init_state, accuracy, loss, optimizer
 
     def train(self, data):
+        saver = tf.train.Saver()
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             global_step = 0
@@ -93,8 +95,9 @@ class DeepWriterModel(object):
                     show_loss, show_accuracy, _ = sess.run(
                         [self.loss, self.accuracy ,self.optimizer], feed_dict)
                     if global_step % 10 == 0:
-                        print('Epoch:{}, global step:{}, loss:{}, accuracy:{}'.
-                              format(i+1, global_step, show_loss, show_accuracy))
+                        print('Epoch:{}, global step:{}, loss:{:.4f}, accuracy:{:.2f}%'.
+                              format(i+1, global_step, show_loss, show_accuracy*100))
+                saver.save(sess, self.flags.model_save_path)
 
 
     def get_generator(self, data):
@@ -107,8 +110,8 @@ class DeepWriterModel(object):
         train_y = train_y.reshape([self.flags.batch_size, -1])
 
         for i in range(0, train_x.shape[1], self.flags.time_steps):
-            batch_x = train_x[i:i+self.flags.time_steps]
-            batch_y = train_y[i:i+self.flags.time_steps]
+            batch_x = train_x[:, i:i+self.flags.time_steps]
+            batch_y = train_y[:, i:i+self.flags.time_steps]
             yield batch_x, batch_y
 
 
