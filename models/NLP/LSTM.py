@@ -19,13 +19,13 @@ def load_data(data_path='dataset/anna_text.txt'):
 def get_flags():
     flags = tf.app.flags.FLAGS
     tf.app.flags.DEFINE_integer('batch_size', 64, 'the number of training batch')
-    tf.app.flags.DEFINE_integer('time_steps', 50, 'time step')
+    tf.app.flags.DEFINE_integer('time_steps', 128, 'time step')
     tf.app.flags.DEFINE_integer('embed_dim', 512, 'dimesion of embedding')
     tf.app.flags.DEFINE_integer('num_units', 512, 'number of units in hidden layer')
     tf.app.flags.DEFINE_integer('num_epochs', 20, 'number of epoch')
     tf.app.flags.DEFINE_integer('show_every_n', 10, 'show every n global training steps')
     tf.app.flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
-    tf.app.flags.DEFINE_string('model_save_path', 'trained_model/lstm/lstm.ckpt', 'the path to save trained model')
+    tf.app.flags.DEFINE_string('model_save_path', 'trained_model/lstm/', 'the path to save trained model')
     return flags
 
 class DeepWriterModel(object):
@@ -59,16 +59,11 @@ class DeepWriterModel(object):
             lstm_output, final_sate = tf.nn.dynamic_rnn(lstm, lstm_input, initial_state=init_state)
 
             fc_input = tf.reshape(lstm_output, [-1, self.flags.num_units])
-            fc_weight = tf.get_variable('fc_weight', [self.flags.num_units, self.flags.num_units],
-                                            initializer=tf.truncated_normal_initializer(stddev=0.1))
-            fc_bias = tf.get_variable('fc_bias', [self.flags.num_units], initializer=tf.constant_initializer(0.0))
-            fc_layer = tf.nn.relu(tf.matmul(fc_input, fc_weight) + fc_bias)
-
             output_weight = tf.get_variable('output_weight', [self.flags.num_units, self.num_chars],
                                             initializer=tf.truncated_normal_initializer(stddev=0.1))
             output_bias = tf.get_variable('output_bias', [self.num_chars],
                                           initializer=tf.constant_initializer(0.0))
-            logits = tf.matmul(fc_layer, output_weight) + output_bias
+            logits = tf.matmul(fc_input, output_weight) + output_bias
 
             loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=tf.reshape(target_y, [-1])))
             accuracy = tf.reduce_mean(
@@ -89,11 +84,11 @@ class DeepWriterModel(object):
 
     def train(self, data):
         with self.graph.as_default():
-            saver = tf.train.Saver()
+            saver = tf.train.Saver(max_to_keep=3)
             with tf.Session(graph=self.graph) as sess:
                 sess.run(tf.global_variables_initializer())
                 global_step = 0
-                for i in range(self.flags.num_epochs):
+                for epoch in range(self.flags.num_epochs):
                     data_generator = self.get_generator(data)
                     new_state = sess.run([self.init_state])
                     for batch_x, batch_y in data_generator:
@@ -105,8 +100,8 @@ class DeepWriterModel(object):
                             [self.loss, self.accuracy, self.final_state, self.optimizer], feed_dict)
                         if global_step % self.flags.show_every_n == 0:
                             print('Epoch:{}, global step:{}, loss:{:.4f}, accuracy:{:.2f}%'.
-                                  format(i+1, global_step, show_loss, show_accuracy*100))
-                            saver.save(sess, self.flags.model_save_path)
+                                  format(epoch+1, global_step, show_loss, show_accuracy*100))
+                    saver.save(sess, self.flags.model_save_path + "epoch{}.ckpt".format(epoch))
 
 
     def get_generator(self, data):
@@ -121,15 +116,18 @@ class DeepWriterModel(object):
         for i in range(0, train_x.shape[1], self.flags.time_steps):
             batch_x = train_x[:, i:i+self.flags.time_steps]
             batch_y = train_y[:, i:i+self.flags.time_steps]
+            # print(batch_x)
+            # print(batch_y)
             yield batch_x, batch_y
 
-    def generate(self, int2char, char2int, start_words="Today, ", total_words=1000):
+    def generate(self, int2char, char2int, start_words="Today, ", total_words=20):
         with self.graph.as_default():
             generated_text = start_words[:]
             int_start_words = [char2int[c] for c in start_words]
             with tf.Session(graph=self.graph) as sess:
                 saver = tf.train.Saver()
-                saver.restore(sess=sess, save_path=self.flags.model_save_path)
+                checkpoint = tf.train.latest_checkpoint(self.flags.model_save_path)
+                saver.restore(sess=sess, save_path=checkpoint)
                 new_state = sess.run(self.init_state)
                 for i in int_start_words:
                     x = np.zeros((1, 1))
@@ -150,14 +148,14 @@ class DeepWriterModel(object):
                         self.init_state:new_state,
                     }
                     new_state, output_text = sess.run([self.final_state, self.prediction], feed_dict)
-                    pred_int = self.pick_topk(prediction_list)
+                    pred_int = self.pick_topk(output_text)
                     generated_text += int2char[pred_int]
 
         print(generated_text)
         return generated_text
 
 
-    def pick_topk(self, prediction_list, top_k=3):
+    def pick_topk(self, prediction_list, top_k=5):
         prediction_list = np.squeeze(prediction_list)
         topk_list = np.argsort(prediction_list)[-top_k:]
         pred_int = np.random.choice(topk_list)
