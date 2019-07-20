@@ -20,10 +20,10 @@ def get_flags():
     flags = tf.app.flags.FLAGS
     tf.app.flags.DEFINE_integer('batch_size', 64, 'the number of training batch')
     tf.app.flags.DEFINE_integer('time_steps', 128, 'time step')
-    tf.app.flags.DEFINE_integer('embed_dim', 512, 'dimesion of embedding')
-    tf.app.flags.DEFINE_integer('num_units', 512, 'number of units in hidden layer')
+    tf.app.flags.DEFINE_integer('embed_dim', 256, 'dimesion of embedding')
+    tf.app.flags.DEFINE_integer('num_units', 256, 'number of units in hidden layer')
     tf.app.flags.DEFINE_integer('num_epochs', 20, 'number of epoch')
-    tf.app.flags.DEFINE_integer('show_every_n', 10, 'show every n global training steps')
+    tf.app.flags.DEFINE_integer('show_every_n', 100, 'show every n global training steps')
     tf.app.flags.DEFINE_float('learning_rate', 0.001, 'learning rate')
     tf.app.flags.DEFINE_string('model_save_path', 'trained_model/lstm/', 'the path to save trained model')
     return flags

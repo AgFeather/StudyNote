@@ -3,12 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.examples.tutorials.mnist import input_data
 
-"""使用卷积自编码机实现图片的降噪功能"""
+"""使用卷积自编码机实现图片的降噪功能，使用mnist数据集"""
 
 mnist = input_data.read_data_sets('MNIST_data', one_hot=False)
 
 
 def ConvAutoEncoder():
+    """构建卷积自编码机模型。encoder包括三层卷积，decoder也包含三层卷积"""
     input_x = tf.placeholder(tf.float32, [None, 28, 28, 1], name='input_x')
     label_y = tf.placeholder(tf.float32, [None, 28, 28, 1], name='label_y')
 
@@ -18,10 +19,10 @@ def ConvAutoEncoder():
     conv2 = tf.layers.conv2d(conv1, 64, (3, 3), strides=1, padding='same', activation=tf.nn.relu)
     conv2 = tf.layers.max_pooling2d(conv2, (2, 2), strides=(2, 2), padding='same')
     conv3 = tf.layers.conv2d(conv2, 32, (3, 3), strides=1, padding='same', activation=tf.nn.relu)
-    conv3 = tf.layers.max_pooling2d(conv3, (2, 2), strides=(2, 2), padding='same')
+    conv3 = tf.layers.max_pooling2d(conv3, (2, 2), strides=(2, 2), padding='same') #(None, 4, 4, 32)
 
     # Decoder:
-    conv4 = tf.image.resize_nearest_neighbor(conv3, (7, 7))
+    conv4 = tf.image.resize_nearest_neighbor(conv3, (7, 7)) # 使用最近邻插值调整images为size.
     conv4 = tf.layers.conv2d(conv4, 32, (3, 3), strides=1, padding='same', activation=tf.nn.relu)
     conv5 = tf.image.resize_nearest_neighbor(conv4, (14, 14))
     conv5 = tf.layers.conv2d(conv5, 64, (3, 3), strides=1, padding='same', activation=tf.nn.relu)
@@ -40,7 +41,7 @@ def ConvAutoEncoder():
 def train():
     input_x, label_y, optimizer, output_y, loss = ConvAutoEncoder()
     noise_factor = 0.5
-    epochs = 1
+    epochs = 3
     batch_size = 128
     global_step = 0
     with tf.Session() as sess:
@@ -49,7 +50,6 @@ def train():
             for i in range(mnist.train.num_examples // batch_size):
                 global_step += 1
                 images = mnist.train.next_batch(batch_size)[0].reshape((-1, 28, 28, 1))
-
                 noisy_images = images + noise_factor * np.random.randn(*images.shape)
                 noisy_images = np.clip(noisy_images, 0., 1)
                 feed_dict = {
@@ -62,14 +62,14 @@ def train():
 
             # 测试模型，可视化：
             fig, axes = plt.subplots(nrows=3, ncols=10, sharex=True, sharey=True, figsize=(20, 4))
-            in_imgs = mnist.test.images[10:20]
-            noisy_imgs = in_imgs + noise_factor * np.random.randn(*in_imgs.shape)
-            noisy_imgs = np.clip(noisy_imgs, 0., 1.)
+            test_images = mnist.test.images[10:20]
+            noisy_images = test_images + noise_factor * np.random.randn(*test_images.shape)
+            noisy_images = np.clip(noisy_images, 0., 1.)
 
             reconstructed = sess.run(output_y,
-                                     feed_dict={input_x: noisy_imgs.reshape((10, 28, 28, 1))})
+                                     feed_dict={input_x: noisy_images.reshape((10, 28, 28, 1))})
 
-            for images, row in zip([in_imgs, noisy_imgs, reconstructed], axes):
+            for images, row in zip([test_images, noisy_images, reconstructed], axes):
                 for img, ax in zip(images, row):
                     ax.imshow(img.reshape((28, 28)))
                     ax.get_xaxis().set_visible(False)
