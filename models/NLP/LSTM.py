@@ -101,6 +101,7 @@ class DeepWriterModel(object):
                         if global_step % self.flags.show_every_n == 0:
                             print('Epoch:{}, global step:{}, loss:{:.4f}, accuracy:{:.2f}%'.
                                   format(epoch+1, global_step, show_loss, show_accuracy*100))
+                    print("epoch:{} model saved".format(epoch))
                     saver.save(sess, self.flags.model_save_path + "epoch{}.ckpt".format(epoch))
 
 
