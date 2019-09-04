@@ -10,7 +10,7 @@ def get_flags():
     flags = tf.app.flags.FLAGS
     tf.app.flags.DEFINE_integer('batch_size', 64, 'the number of training batch')
     tf.app.flags.DEFINE_integer('num_units', 256, 'number of units in hidden layer')
-    tf.app.flags.DEFINE_integer('num_epochs', 10, 'number of epoch')
+    tf.app.flags.DEFINE_integer('num_epochs', 3, 'number of epoch')
     tf.app.flags.DEFINE_integer('show_every_n', 100, 'show every n global training steps')
     tf.app.flags.DEFINE_integer('noise_size', 100, 'size of noise image')
     tf.app.flags.DEFINE_integer('real_size', 784, 'the size of true image')
@@ -38,7 +38,22 @@ class MnistGAN(object):
             noise_image_input = tf.placeholder(tf.float32, [None, self.flags.noise_size], name='noise_img')
             real_image_input = tf.placeholder(tf.float32, [None, self.flags.real_size], name='real_img')
 
-            with tf.variable_scope("generator", reuse=False):
+            # with tf.variable_scope("generator", reuse=False):
+            #     """构建图片生成器generator，
+            #     将noise image输入到一个小型神经网络中，
+            #     输出即为generator生成的输出图片
+            #     神经网络的输出大小为真实图片的大小"""
+            #     hidden1 = tf.layers.dense(noise_image_input, self.flags.num_units, activation=tf.nn.relu)
+            #     gen_logits = tf.layers.dense(hidden1, self.flags.real_size)
+            #     gen_outputs = tf.tanh(gen_logits)
+            #
+            # with tf.variable_scope("generator", reuse=True):
+            #     """生成一个图片，在模型训练结束后进行生成时使用"""
+            #     hidden1 = tf.layers.dense(noise_image_input, self.flags.num_units, activation=tf.nn.relu)
+            #     sample_logits = tf.layers.dense(hidden1, self.flags.real_size)
+            #     sample_outputs = tf.tanh(sample_logits)
+
+            with tf.variable_scope("generator", reuse=tf.AUTO_REUSE):
                 """构建图片生成器generator，
                 将noise image输入到一个小型神经网络中，
                 输出即为generator生成的输出图片
@@ -47,24 +62,24 @@ class MnistGAN(object):
                 gen_logits = tf.layers.dense(hidden1, self.flags.real_size)
                 gen_outputs = tf.tanh(gen_logits)
 
-            with tf.variable_scope("generator", reuse=True):
-                """生成一个图片，在模型训练结束后进行生成时使用"""
-                hidden1 = tf.layers.dense(noise_image_input, self.flags.num_units, activation=tf.nn.relu)
-                sample_logits = tf.layers.dense(hidden1, self.flags.real_size)
-                sample_outputs = tf.tanh(sample_logits)
-
             with tf.variable_scope("discriminator", reuse=False):
                 """构建一个判别器discriminator，输入real image，并让判别器给real image打分"""
-                hidden1 = tf.layers.dense(real_image_input, self.flags.num_units, activation=tf.nn.relu)
-                d_logits_real = tf.layers.dense(hidden1, 1)
+                d_fc_1 = tf.layers.dense(real_image_input, self.flags.num_units,
+                                         activation=tf.nn.relu, name='fc_layer1')
+                #d_fc_2 = tf.layers.dense(d_fc_1, self.flags.num_units, activation=tf.nn.relu, name='fc_layer2')
+                #d_fc_3 = tf.layers.dense(d_fc_2, self.flags.num_units, activation=tf.nn.relu, name='fc_layer3')
+                d_logits_real = tf.layers.dense(d_fc_1, 1)
                 d_outputs_real = tf.sigmoid(d_logits_real)
 
             with tf.variable_scope("discriminator", reuse=True):
                 """让判别器对生成器generator生成的图片进行判别打分"""
-                hidden1 = tf.layers.dense(gen_outputs, self.flags.num_units, activation=tf.nn.relu)
-                d_logits_fake = tf.layers.dense(hidden1, 1)
+                #hidden1 = tf.layers.dense(gen_outputs, self.flags.num_units, activation=tf.nn.relu)
+                d_fc_1 = tf.layers.dense(gen_outputs, self.flags.num_units,
+                                         activation=tf.nn.relu, name='fc_layer1')
+                #d_fc_2 = tf.layers.dense(d_fc_1, self.flags.num_units, activation=tf.nn.relu, name='fc_layer2')
+                #d_fc_3 = tf.layers.dense(d_fc_2, self.flags.num_units, activation=tf.nn.relu, name='fc_layer3')
+                d_logits_fake = tf.layers.dense(d_fc_1, 1)
                 d_outputs_fake = tf.sigmoid(d_logits_fake)
-
 
             # discriminator的loss，
             # 对real image，所有标签都为1，也就是说令logits逼近1
@@ -87,7 +102,7 @@ class MnistGAN(object):
             gen_optimizer = tf.train.AdamOptimizer(self.flags.learning_rate).minimize(g_loss, var_list=g_vars)
 
         return graph, real_image_input, noise_image_input, \
-               sample_logits, sample_outputs, \
+               gen_logits, gen_outputs, \
                g_loss, d_loss, \
                disc_optimizer, gen_optimizer
 
@@ -95,10 +110,11 @@ class MnistGAN(object):
         print('model training begin...')
         samples = []  # 存储测试样例
         with self.graph.as_default():
-            train_vars = tf.trainable_variables()
+            #train_vars = tf.trainable_variables()
             # generator中的tensor
-            g_vars = [var for var in train_vars if var.name.startswith("generator")]
-            saver = tf.train.Saver(var_list=g_vars)
+            #g_vars = [var for var in train_vars if var.name.startswith("generator")]
+            #saver = tf.train.Saver(var_list=g_vars)
+            saver = tf.train.Saver()
             with tf.Session() as sess:
                 sess.run(tf.global_variables_initializer())
                 for e in range(self.flags.num_epochs):
@@ -163,7 +179,7 @@ class ImageGenerator(object):
             checkpoints = tf.train.latest_checkpoint('checkpoints/')
             saver.restore(sess, checkpoints)
             sample_noise = np.random.uniform(-1, 1, size=(25, noise_size))
-            gen_samples = self.session.run([self.model.sample_logits, self.model.sample_outputs],
+            gen_samples = sess.run([self.model.sample_logits, self.model.sample_outputs],
                                            feed_dict={self.model.noise_image_input: sample_noise})
             _ = self.view_samples(0, [gen_samples])
 
@@ -171,7 +187,7 @@ class ImageGenerator(object):
 if __name__ == '__main__':
     flags =get_flags()
     mnist = input_data.read_data_sets('MNIST_data/', one_hot=True)
-    # model = MnistGAN(flags)
-    # model.train(mnist)
+    model = MnistGAN(flags)
+    model.train(mnist)
     image_generator = ImageGenerator(flags)
     image_generator.display_training_samples()
